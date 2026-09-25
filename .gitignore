@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+
+# Pliki roboczne z odzyskiwania danych z kopii iPhone'a - nie trafiaja do repo
+8e/
+Manifest.db-kopia
+
+# Odzyskana historia czytania i refleksje - dane osobiste.
+# Zostaja lokalnie; na telefon trafiaja przez "Wczytaj kopie z pliku".
+data/
+tsconfig.tsbuildinfo
+.github/workflows/
