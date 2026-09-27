@@ -42,7 +42,11 @@ function Toggle({ label, hint, value, onChange }: {
 
 export default function SettingsView() {
   const s = useSettings()
-  const { categories, add, update, remove } = useCategories()
+  const { add, update, remove } = useCategories()
+  // Filtr POZA selektorem: selektor zwracajacy nowa tablice przy kazdym
+  // wywolaniu lamie porownanie Object.is w useSyncExternalStore.
+  const allCategories = useCategories((st) => st.categories)
+  const categories = allCategories.filter((c) => !c.deletedAt)
   const [newName, setNewName] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
   const set = <K extends keyof Settings>(k: K) => (v: Settings[K]) => s.set(k, v)

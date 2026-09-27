@@ -2,19 +2,26 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { KEY, type Settings } from '../types'
 import { DEFAULT_SETTINGS } from '../lib/defaults'
-import { scheduleSync } from '../lib/storage'
+import { nowMs, writeRaw, registerReloader } from '../lib/storage'
+import { scheduleSync } from '../lib/sync'
 
 interface SettingsStore extends Settings {
   set<K extends keyof Settings>(key: K, value: Settings[K]): void
   resetAll(): void
 }
 
+/** Znacznik zmiany ustawien zyje obok, bo persist zapisuje tylko pola Settings. */
+function touch() {
+  writeRaw(KEY.settingsUpdatedAt, String(nowMs()))
+  scheduleSync()
+}
+
 export const useSettings = create<SettingsStore>()(
   persist(
     (set) => ({
       ...DEFAULT_SETTINGS,
-      set: (key, value) => { set({ [key]: value } as never); scheduleSync() },
-      resetAll: () => { set({ ...DEFAULT_SETTINGS }); scheduleSync() },
+      set: (key, value) => { set({ [key]: value } as never); touch() },
+      resetAll: () => { set({ ...DEFAULT_SETTINGS }); touch() },
     }),
     {
       name: KEY.settings,
@@ -30,3 +37,5 @@ export const useSettings = create<SettingsStore>()(
     }
   )
 )
+
+registerReloader(() => { void useSettings.persist.rehydrate() })

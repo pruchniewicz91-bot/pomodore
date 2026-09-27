@@ -1,7 +1,13 @@
 node_modules/
 dist/
 .DS_Store
+
+# Klucze i hasla. Wyjatek na koncu jest istotny: bez niego .env.local.example
+# tez zostalby wykluczony i nikt nigdy nie zobaczylby, jakich zmiennych brakuje.
 *.local
+.env
+.env.*
+!.env.local.example
 
 # Pliki roboczne z odzyskiwania danych z kopii iPhone'a - nie trafiaja do repo
 8e/

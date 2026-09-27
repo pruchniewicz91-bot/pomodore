@@ -18,7 +18,8 @@ function mmss(total: number) {
 export default function TimerView() {
   const t = useTimer()
   const settings = useSettings()
-  const { categories } = useCategories()
+  const categories = useCategories((st) => st.categories)
+  const activeCats = categories.filter((c) => !c.deletedAt)
   const { sessions } = useSessions()
 
   const cat = categories.find((c) => c.id === t.categoryId) ?? null
@@ -85,7 +86,7 @@ export default function TimerView() {
         <button className="chip" aria-pressed={t.categoryId === null} onClick={() => t.setCategory(null)}>
           Bez kategorii
         </button>
-        {categories.map((c) => (
+        {activeCats.map((c) => (
           <button
             key={c.id}
             className="chip"

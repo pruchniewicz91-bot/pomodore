@@ -1,8 +1,14 @@
 import { KEY } from '../types'
 import type { Category, Session, Settings } from '../types'
-import { snapshot, writeKey, type Snapshot } from './storage'
+import { nowMs, readKey, snapshot, writeKey, writeRaw, type Snapshot } from './storage'
 
-/** Zrzut do pliku - ostatnia linia obrony, dziala bez konta i bez internetu. */
+/**
+ * Trzecia warstwa trwalosci: plik na dysku.
+ * Chmura nie jest wieczna - darmowy plan Supabase usypia projekt po tygodniu
+ * bezczynnosci i po dlugim uspieniu moze go skasowac. To niepokojaco dokladne
+ * echo siedmiodniowego certyfikatu Apple, ktory zabral wersje 1.0.
+ */
+
 export function downloadBackup() {
   const data = snapshot()
   const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')
@@ -13,53 +19,102 @@ export function downloadBackup() {
   a.download = `pomodore-backup-${stamp}.json`
   a.click()
   URL.revokeObjectURL(url)
-  localStorage.setItem('pomodore-last-backup', String(Date.now()))
+  localStorage.setItem('pomodore-last-backup', String(nowMs()))
 }
 
 export function daysSinceBackup(): number | null {
   const raw = localStorage.getItem('pomodore-last-backup')
   if (!raw) return null
-  return Math.floor((Date.now() - Number(raw)) / 86_400_000)
+  return Math.floor((nowMs() - Number(raw)) / 86_400_000)
+}
+
+export interface RestoreReport {
+  sessions: number
+  categories: number
+  /** Rekordy pominiete, bo lokalnie maja nagrobek - nie wskrzeszamy ich. */
+  skippedDeleted: number
+  settings: 'zaktualizowane' | 'pominiete-starsze' | 'pominiete-brak-daty' | 'brak'
 }
 
 /**
- * Wczytanie zrzutu. Scala po id zamiast nadpisywac, zeby import starej kopii
- * nie skasowal sesji zapisanych po jej wykonaniu.
+ * Scalanie po id. Ta funkcja odzyskala 29 sesji z kopii iPhone'a i jej rdzen
+ * zostaje bez zmian. Doszly dwie rzeczy, ktorych brak byl bledem:
+ *
+ *  - swiadomosc nagrobkow: rekord skasowany lokalnie nie wraca do zycia
+ *    przez wczytanie starszej kopii,
+ *  - porownanie czasu dla ustawien: wczytanie kopii sprzed dwoch miesiecy
+ *    nie moze cofnac ustawien na wszystkich urzadzeniach. Wczesniej robilo
+ *    to bezwarunkowo, mimo komunikatu obiecujacego, ze import nic nie nadpisuje.
  */
-export function restoreBackup(json: string): { sessions: number; categories: number } {
+export function restoreBackup(json: string): RestoreReport {
   const data = JSON.parse(json) as Partial<Snapshot>
   if (!data || typeof data !== 'object') throw new Error('To nie jest plik kopii Pomodore')
 
-  let addedSessions = 0
-  let addedCategories = 0
+  const report: RestoreReport = {
+    sessions: 0, categories: 0, skippedDeleted: 0, settings: 'brak',
+  }
 
   if (Array.isArray(data.sessions)) {
-    const existing = JSON.parse(localStorage.getItem(KEY.sessions) ?? '[]') as Session[]
-    const seen = new Set(existing.map((s) => s.id))
-    const merged = [...existing]
+    const existing = readKey<Session[]>(KEY.sessions, [])
+    const byId = new Map(existing.map((s) => [s.id, s]))
     for (const s of data.sessions) {
-      if (!seen.has(s.id)) { merged.push(s); seen.add(s.id); addedSessions++ }
+      const mine = byId.get(s.id)
+      if (mine?.deletedAt) { report.skippedDeleted++; continue }
+      const zPliku = {
+        ...s,
+        synced: false,
+        updatedAt: s.updatedAt ?? s.endedAt ?? s.startedAt ?? 0,
+        deletedAt: s.deletedAt ?? null,
+      }
+      // Rekord istniejacy lokalnie, ale STARSZY, zostaje odtworzony z pliku.
+      // Wczesniej kazdy istniejacy byl pomijany, wiec kopia nie potrafila
+      // naprawic wpisu uszkodzonego albo pozbawionego refleksji.
+      if (mine && zPliku.updatedAt <= (mine.updatedAt ?? 0)) continue
+      byId.set(s.id, zPliku)
+      report.sessions++
     }
-    merged.sort((a, b) => a.startedAt - b.startedAt)
-    writeKey(KEY.sessions, merged)
+    writeKey(KEY.sessions, [...byId.values()].sort((a, b) => a.startedAt - b.startedAt))
   }
 
   if (Array.isArray(data.categories)) {
-    const cur = JSON.parse(localStorage.getItem(KEY.categories) ?? 'null') as
-      { state: { categories: Category[] }; version: number } | null
-    const existing = cur?.state.categories ?? []
-    const seen = new Set(existing.map((c) => c.id))
-    const merged = [...existing]
+    const box = readKey<{ state: { categories: Category[] }; version: number }>(
+      KEY.categories, { state: { categories: [] }, version: 5 }
+    )
+    const byId = new Map(box.state.categories.map((c) => [c.id, c]))
     for (const c of data.categories) {
-      if (!seen.has(c.id)) { merged.push(c); seen.add(c.id); addedCategories++ }
+      const mine = byId.get(c.id)
+      if (mine?.deletedAt) { report.skippedDeleted++; continue }
+      const zPliku = {
+        ...c,
+        synced: false,
+        updatedAt: c.updatedAt ?? c.createdAt ?? 0,
+        deletedAt: c.deletedAt ?? null,
+      }
+      if (mine && zPliku.updatedAt <= (mine.updatedAt ?? 0)) continue
+      byId.set(c.id, zPliku)
+      report.categories++
     }
-    merged.sort((a, b) => a.position - b.position)
-    writeKey(KEY.categories, { state: { categories: merged }, version: 4 })
+    // version: 5 celowo na sztywno - to biezacy numer, a import musi przejsc
+    // przez te sama sciezke co reszta. Przy podniesieniu wersji zmienic TU.
+    writeKey(KEY.categories, { state: { categories: [...byId.values()] }, version: 5 })
   }
 
   if (data.settings && Object.keys(data.settings).length) {
-    writeKey(KEY.settings, { state: data.settings as Settings, version: 2 })
+    const fileAt = data.exportedAt ?? 0
+    if (!fileAt) {
+      report.settings = 'pominiete-brak-daty'
+    } else {
+      const currentAt = Number(localStorage.getItem(KEY.settingsUpdatedAt) ?? 0)
+      const localBaseline = currentAt || 0
+      if (fileAt >= localBaseline) {
+        writeKey(KEY.settings, { state: data.settings as Settings, version: 2 })
+        writeRaw(KEY.settingsUpdatedAt, String(fileAt))
+        report.settings = 'zaktualizowane'
+      } else {
+        report.settings = 'pominiete-starsze'
+      }
+    }
   }
 
-  return { sessions: addedSessions, categories: addedCategories }
+  return report
 }

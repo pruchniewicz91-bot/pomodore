@@ -6,6 +6,7 @@ import { useCategories } from './categories'
 import { useSessions } from './sessions'
 import { effective, minutesFor } from '../lib/effective'
 import { playEndSound, warn } from '../lib/audio'
+import { flushNow } from '../lib/sync'
 
 interface TimerStore extends TimerState {
   elapsedSeconds(): number
@@ -160,6 +161,8 @@ export const useTimer = create<TimerStore>()(
         const id = get().pendingReflection
         if (id) useSessions.getState().update(id, { reflection: text || null, mood })
         set({ pendingReflection: null })
+        // Refleksja to jedyna tresc w tej aplikacji, ktorej nie da sie odtworzyc.
+        flushNow()
       },
 
       dismissReflection: () => set({ pendingReflection: null }),
@@ -194,7 +197,12 @@ function logSession(s: TimerState, actualSeconds: number, status: SessionStatus)
     startedAt: s.startedAt!,
     endedAt: Date.now(),
     synced: false,
+    updatedAt: Date.now(),
+    deletedAt: null,
   }
   lastSessionId = session.id
   useSessions.getState().add(session)
+  // Bez dlawienia: iOS zamraza JS, gdy telefon laduje w kieszeni po sesji,
+  // a wtedy timer odroczonej wysylki juz nie wystartuje.
+  flushNow()
 }

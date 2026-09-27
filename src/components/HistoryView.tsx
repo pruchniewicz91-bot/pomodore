@@ -15,11 +15,12 @@ function dayLabel(ts: number) {
 
 export default function HistoryView() {
   const { sessions } = useSessions()
-  const { categories } = useCategories()
+  const categories = useCategories((st) => st.categories)
+  const activeCats = categories.filter((c) => !c.deletedAt)
   const [filter, setFilter] = useState<string | null>(null)
 
   const focus = useMemo(
-    () => sessions.filter((s) => s.mode === 'focus' && (!filter || s.categoryId === filter)),
+    () => sessions.filter((s) => !s.deletedAt && s.mode === 'focus' && (!filter || s.categoryId === filter)),
     [sessions, filter]
   )
 
@@ -76,7 +77,7 @@ export default function HistoryView() {
         <button className="chip" aria-pressed={filter === null} onClick={() => setFilter(null)}>
           Wszystkie
         </button>
-        {categories.map((c) => (
+        {activeCats.map((c) => (
           <button key={c.id} className="chip" aria-pressed={filter === c.id} onClick={() => setFilter(c.id)}>
             <span className="dot" style={{ background: c.color }} />
             {c.name}

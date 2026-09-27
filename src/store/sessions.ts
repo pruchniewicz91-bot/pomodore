@@ -1,32 +1,65 @@
 import { create } from 'zustand'
 import { KEY, type Session } from '../types'
-import { readKey, writeKey, scheduleSync } from '../lib/storage'
+import { readKey, writeKey, nowMs, mergeById, registerReloader } from '../lib/storage'
+import { scheduleSync } from '../lib/sync'
 
 /**
  * Dziennik sesji celowo NIE uzywa middleware persist.
  * Wersja 1.0 zapisywala go jako czysta tablice JSON, nie jako {state, version}.
  * Trzymamy sie tego formatu, zeby odzyskane rekordy wczytywaly sie wprost.
+ *
+ * Skutek uboczny: tablica nie ma numeru wersji, wiec migracja pol
+ * synchronizacji musi sie dziac przy kazdym odczycie.
  */
 interface SessionsStore {
   sessions: Session[]
+  active(): Session[]
   add(s: Session): void
   update(id: string, patch: Partial<Session>): void
   replaceAll(list: Session[]): void
   reload(): void
 }
 
-function load(): Session[] {
-  const raw = readKey<Session[]>(KEY.sessions, [])
-  return Array.isArray(raw) ? raw.slice().sort((a, b) => a.startedAt - b.startedAt) : []
+/**
+ * Uzupelnia pola synchronizacji w rekordach sprzed wersji 2.0.
+ * updatedAt = endedAt, a nie "teraz": dwumiesieczna sesja historyczna nie moze
+ * wygrywac rozstrzygania konfliktu z edycja zrobiona wczoraj gdzie indziej.
+ */
+function migrate(list: Session[]): { list: Session[]; changed: boolean } {
+  let changed = false
+  const out = list.map((s) => {
+    if (s.updatedAt !== undefined && s.deletedAt !== undefined) return s
+    changed = true
+    return { ...s, updatedAt: s.updatedAt ?? s.endedAt ?? s.startedAt ?? 0, deletedAt: s.deletedAt ?? null }
+  })
+  return { list: out, changed }
 }
 
+function load(): Session[] {
+  const raw = readKey<Session[]>(KEY.sessions, [])
+  if (!Array.isArray(raw)) return []
+  const { list, changed } = migrate(raw)
+  if (changed) writeKey(KEY.sessions, list)
+  return list.slice().sort((a, b) => a.startedAt - b.startedAt)
+}
+
+/**
+ * Zapis SCALAJACY, nie nadpisujacy. Magazyn trzyma kopie w pamieci od chwili
+ * zaladowania modulu; synchronizacja pisze do localStorage bezposrednio.
+ * Nadpisanie calej tablicy stanem z pamieci kasowaloby rekordy pobrane z
+ * chmury w miedzyczasie - a kursor juz by je minal, wiec nie wrocilyby nigdy.
+ */
 function save(list: Session[]) {
-  writeKey(KEY.sessions, list)
+  const naDysku = readKey<Session[]>(KEY.sessions, [])
+  const merged = mergeById(naDysku, list).sort((a, b) => a.startedAt - b.startedAt)
+  writeKey(KEY.sessions, merged)
   scheduleSync()
 }
 
 export const useSessions = create<SessionsStore>()((set, get) => ({
   sessions: load(),
+
+  active: () => get().sessions.filter((s) => !s.deletedAt),
 
   add: (s) => {
     const next = [...get().sessions, s].sort((a, b) => a.startedAt - b.startedAt)
@@ -35,7 +68,9 @@ export const useSessions = create<SessionsStore>()((set, get) => ({
   },
 
   update: (id, patch) => {
-    const next = get().sessions.map((s) => (s.id === id ? { ...s, ...patch, synced: false } : s))
+    const next = get().sessions.map((s) =>
+      s.id === id ? { ...s, ...patch, updatedAt: nowMs(), synced: false } : s
+    )
     set({ sessions: next })
     save(next)
   },
@@ -60,7 +95,7 @@ export function startOfToday(): number {
 export function todaysFocus(sessions: Session[]) {
   const from = startOfToday()
   const today = sessions.filter(
-    (s) => s.startedAt >= from && s.mode === 'focus' && s.status === 'completed'
+    (s) => !s.deletedAt && s.startedAt >= from && s.mode === 'focus' && s.status === 'completed'
   )
   return {
     count: today.length,
@@ -73,7 +108,7 @@ export function todaysFocus(sessions: Session[]) {
 export function streak(sessions: Session[]): number {
   const days = new Set(
     sessions
-      .filter((s) => s.mode === 'focus' && s.status === 'completed')
+      .filter((s) => !s.deletedAt && s.mode === 'focus' && s.status === 'completed')
       .map((s) => new Date(s.startedAt).toDateString())
   )
   let n = 0
@@ -86,3 +121,6 @@ export function streak(sessions: Session[]): number {
   }
   return n
 }
+
+// Synchronizacja wola to po kazdym zapisie do localStorage.
+registerReloader(() => useSessions.getState().reload())

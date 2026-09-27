@@ -19,6 +19,10 @@ export interface Category {
   longBreakEverySessions: number | null
   longBreakEveryMinutes: number | null
   dailySessionGoal: number | null
+  // Synchronizacja. updatedAt rozstrzyga konflikty (LWW per rekord),
+  // deletedAt to nagrobek - kasowanie nigdy nie usuwa wiersza fizycznie.
+  updatedAt: number
+  deletedAt: number | null
 }
 
 export interface Session {
@@ -34,6 +38,8 @@ export interface Session {
   startedAt: number
   endedAt: number
   synced: boolean
+  updatedAt: number
+  deletedAt: number | null
 }
 
 export interface Settings {
@@ -80,10 +86,19 @@ export interface TimerState {
   pendingReflection: string | null
 }
 
-// Klucze localStorage - identyczne jak w wersji 1.0 na iPhonie.
+// Klucze localStorage - cztery pierwsze identyczne jak w wersji 1.0 na iPhonie,
+// zeby odzyskane rekordy wczytywaly sie bez konwersji.
 export const KEY = {
   settings: 'pomodore-settings',
   categories: 'pomodore-categories',
   sessions: 'pomodore-session-log',
   timer: 'pomodore-timer',
+  // --- synchronizacja ---
+  cursor: 'pomodore-sync-cursor',
+  /** `${url}|${userId}` - zmiana oznacza inny projekt lub inne konto. */
+  owner: 'pomodore-sync-owner',
+  lastSync: 'pomodore-last-sync',
+  settingsUpdatedAt: 'pomodore-settings-updated-at',
+  /** Rekordy odrzucane przez serwer - pomijane w kolejnych probach. */
+  poison: 'pomodore-poison',
 } as const
