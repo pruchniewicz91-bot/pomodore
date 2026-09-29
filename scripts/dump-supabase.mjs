@@ -12,20 +12,48 @@ import { createClient } from '@supabase/supabase-js'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createInterface } from 'node:readline'
 
-const { VITE_SUPABASE_URL: URL, VITE_SUPABASE_ANON_KEY: ANON,
-        POMODORE_EMAIL: EMAIL, POMODORE_PASSWORD: PASS } = process.env
+const { VITE_SUPABASE_URL: URL, VITE_SUPABASE_ANON_KEY: ANON } = process.env
+let EMAIL = process.env.POMODORE_EMAIL
+let PASS = process.env.POMODORE_PASSWORD
 
-const brakujace = Object.entries({ VITE_SUPABASE_URL: URL, VITE_SUPABASE_ANON_KEY: ANON,
-                                   POMODORE_EMAIL: EMAIL, POMODORE_PASSWORD: PASS })
-  .filter(([, v]) => !v).map(([k]) => k)
-
-if (brakujace.length) {
-  console.error('Brak zmiennych srodowiskowych: ' + brakujace.join(', '))
-  console.error('Uzupelnij .env.local i uruchom:')
+if (!URL || !ANON) {
+  console.error('Brak VITE_SUPABASE_URL albo VITE_SUPABASE_ANON_KEY.')
+  console.error('Uruchom tak, zeby skrypt widzial .env.local:')
   console.error('  node --env-file=.env.local scripts/dump-supabase.mjs')
   process.exit(1)
 }
+
+/**
+ * Haslo pytamy interaktywnie, gdy nie ma go w zmiennych.
+ * Argument wiersza polecen odpada - trafilby do historii powloki.
+ * Plik tez jest gorszy niz pytanie: haslo do konta nie musi lezec na dysku,
+ * skoro potrzebne jest raz na jakis czas.
+ */
+function zapytaj(pytanie, ukryte = false) {
+  return new Promise((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true })
+    if (ukryte) {
+      // Podmieniamy wypisywanie, zeby haslo nie pojawilo sie na ekranie.
+      const pisz = rl._writeToOutput?.bind(rl)
+      rl._writeToOutput = function (str) {
+        if (str.includes(pytanie)) pisz?.(str)
+        else pisz?.('*')
+      }
+    }
+    rl.question(pytanie, (odp) => { rl.close(); if (ukryte) process.stdout.write('\n'); resolve(odp.trim()) })
+  })
+}
+
+if (!process.stdin.isTTY && (!EMAIL || !PASS)) {
+  console.error('Brak POMODORE_EMAIL / POMODORE_PASSWORD, a terminal nie pozwala zapytac.')
+  console.error('Uzupelnij je w .env.local albo uruchom skrypt w zwyklym terminalu.')
+  process.exit(1)
+}
+
+if (!EMAIL) EMAIL = await zapytaj('E-mail konta Pomodore: ')
+if (!PASS) PASS = await zapytaj('Haslo (nie bedzie widoczne): ', true)
 
 const db = createClient(URL, ANON, { auth: { persistSession: false } })
 
