@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useSessions } from '../store/sessions'
 import { useCategories } from '../store/categories'
 import { downloadBackup, restoreBackup, daysSinceBackup } from '../lib/backup'
-import { dirtyCount, poisonCount, clearPoison, readKey, SYNC_EVENT, type SyncState } from '../lib/storage'
+import { dirtyCount, poisonCount, clearPoison, currentSyncState, readKey, SYNC_EVENT, type SyncState } from '../lib/storage'
+import { diagnostyka, type Kontrola } from '../lib/diagnostyka'
 import { flushNow, pull, verifyCount, resendEverything, DATA_CHANGED } from '../lib/sync'
 import { useAuth, signIn, signOut, sendCode, verifyCode, changePassword, CLOUD_CONFIGURED } from '../lib/auth'
 import type { Session } from '../types'
@@ -146,10 +147,12 @@ export default function DataView() {
   const auth = useAuth()
   const fileRef = useRef<HTMLInputElement>(null)
   const [msg, setMsg] = useState<string | null>(null)
-  const [sync, setSync] = useState<SyncState>({
-    phase: 'idle', message: null, lastSyncAt: null, dirty: 0,
-    poison: 0, mismatch: null, verifiedAt: null,
-  })
+  // Stan startowy czytamy z modulu. Wszystko, co wydarzylo sie przed
+  // zamontowaniem tego komponentu - a startSync() dziala przed pierwszym
+  // renderem - inaczej przepadaloby bez sladu.
+  const [sync, setSync] = useState<SyncState>(() => currentSyncState())
+  const [kontrole, setKontrole] = useState<Kontrola[] | null>(null)
+  const [bada, setBada] = useState(false)
 
   useEffect(() => {
     const onSync = (e: Event) => setSync((s) => ({ ...s, ...(e as CustomEvent).detail }))
@@ -239,10 +242,19 @@ export default function DataView() {
         </div>
       )}
 
-      {days !== null && days >= 7 && (
+      {(days === null || days >= 7) && (
         <div className="banner warn">
-          <span aria-hidden>⏳</span>
-          <div>Ostatnia kopia do pliku {days} dni temu.</div>
+          <span aria-hidden>{days === null ? '📄' : '⏳'}</span>
+          <div>
+            {days === null ? (
+              <>
+                <strong>Nigdy nie zrobiłeś kopii do pliku.</strong> To jedyna warstwa, która nie
+                zależy od niczyjego serwera. Zrób ją teraz — zajmuje sekundę.
+              </>
+            ) : (
+              <>Ostatnia kopia do pliku {days} dni temu.</>
+            )}
+          </div>
         </div>
       )}
 
@@ -321,6 +333,43 @@ export default function DataView() {
           </div>
         </div>
       )}
+
+      <div className="stack-sm">
+        <button
+          className="btn btn-ghost"
+          disabled={bada}
+          onClick={async () => {
+            setBada(true); setKontrole(null)
+            try { setKontrole(await diagnostyka()) }
+            catch (e) { setKontrole([{ nazwa: 'Diagnostyka', wynik: 'blad', szczegoly: (e as Error).message }]) }
+            finally { setBada(false) }
+          }}
+        >
+          {bada ? 'Sprawdzam…' : 'Diagnostyka połączenia'}
+        </button>
+
+        {kontrole && (
+          <div className="card" style={{ paddingTop: 2, paddingBottom: 2 }}>
+            {kontrole.map((k) => (
+              <div className="row" key={k.nazwa}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14.5 }}>{k.nazwa}</div>
+                  <div className="faint" style={{ wordBreak: 'break-word' }}>{k.szczegoly}</div>
+                </div>
+                <span
+                  className="mono"
+                  style={{
+                    flex: '0 0 auto', fontSize: 13, fontWeight: 600,
+                    color: k.wynik === 'ok' ? 'var(--accent)' : k.wynik === 'uwaga' ? '#D9A521' : 'var(--danger)',
+                  }}
+                >
+                  {k.wynik === 'ok' ? 'OK' : k.wynik === 'uwaga' ? 'UWAGA' : 'BŁĄD'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {msg && <div className="banner">{msg}</div>}
     </div>

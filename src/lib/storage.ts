@@ -192,6 +192,9 @@ export function classifyError(e: unknown): ErrorKind {
   if (code === 'PGRST301' || code === 'PGRST302' || code === '42501') return 'auth'
   if (err.status === 401 || err.status === 403) return 'auth'
   if (msg.includes('jwt') || msg.includes('not authenticated')) return 'auth'
+  // Odrzucony albo zrotowany klucz publishable. Bez tego aplikacja w kolko
+  // pokazywalaby "brak polaczenia", a uzytkownik szukalby problemu z siecia.
+  if (msg.includes('invalid api key') || msg.includes('no api key')) return 'auth'
 
   // Trwale odrzucenie danych - ponawianie nic nie da.
   // 23502 not null, 23503 klucz obcy, 23505 unikalnosc, 23514 check,
@@ -328,6 +331,37 @@ export interface SyncState {
 
 export const SYNC_EVENT = 'pomodore:sync-state'
 
+/**
+ * Ostatni znany stan zyje w module, nie w komponencie.
+ *
+ * Powod: initCloud() i startSync() startuja w main.tsx PRZED wyrenderowaniem
+ * Reacta. emitSync() to zdarzenie okna, wiec wszystko, co poleci przed
+ * zamontowaniem DataView, przepada bez sladu - lacznie z komunikatami o bledach
+ * i z alarmem o rozjezdzie liczb. Diagnozowanie czegokolwiek stawalo sie wtedy
+ * zgadywaniem: brak komunikatu nie znaczyl, ze nie bylo bledu, tylko ze nikt
+ * nie sluchal.
+ */
+let stanSync: SyncState = {
+  phase: 'idle',
+  message: null,
+  lastSyncAt: null,
+  dirty: 0,
+  poison: 0,
+  mismatch: null,
+  verifiedAt: null,
+}
+
+export function currentSyncState(): SyncState {
+  return {
+    ...stanSync,
+    dirty: dirtyCount(),
+    poison: poisonCount(),
+    // Data ostatniej wysylki przezywa przeladowanie strony - jest na dysku.
+    lastSyncAt: stanSync.lastSyncAt ?? (Number(readRaw(KEY.lastSync)) || null),
+  }
+}
+
 export function emitSync(patch: Partial<SyncState>) {
+  stanSync = { ...stanSync, ...patch }
   window.dispatchEvent(new CustomEvent<Partial<SyncState>>(SYNC_EVENT, { detail: patch }))
 }

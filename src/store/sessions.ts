@@ -25,12 +25,29 @@ interface SessionsStore {
  * updatedAt = endedAt, a nie "teraz": dwumiesieczna sesja historyczna nie moze
  * wygrywac rozstrzygania konfliktu z edycja zrobiona wczoraj gdzie indziej.
  */
+// Wersja 1.0 zapisywala tryb z podkresleniem. Typ Mode uzywa wielblada.
+// Bez tej mapy 11 z 29 odzyskanych sesji trafiloby do chmury w starej pisowni
+// i zostaloby tam na stale, niezgodne z tym, co zapisuje biezacy kod.
+const STARE_TRYBY: Record<string, Session['mode']> = {
+  short_break: 'shortBreak',
+  long_break: 'longBreak',
+  shortbreak: 'shortBreak',
+  longbreak: 'longBreak',
+}
+
 function migrate(list: Session[]): { list: Session[]; changed: boolean } {
   let changed = false
   const out = list.map((s) => {
-    if (s.updatedAt !== undefined && s.deletedAt !== undefined) return s
+    const trybDoPoprawy = STARE_TRYBY[s.mode as unknown as string]
+    const brakPol = s.updatedAt === undefined || s.deletedAt === undefined
+    if (!trybDoPoprawy && !brakPol) return s
     changed = true
-    return { ...s, updatedAt: s.updatedAt ?? s.endedAt ?? s.startedAt ?? 0, deletedAt: s.deletedAt ?? null }
+    return {
+      ...s,
+      mode: trybDoPoprawy ?? s.mode,
+      updatedAt: s.updatedAt ?? s.endedAt ?? s.startedAt ?? 0,
+      deletedAt: s.deletedAt ?? null,
+    }
   })
   return { list: out, changed }
 }

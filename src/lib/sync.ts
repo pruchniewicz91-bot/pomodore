@@ -197,7 +197,13 @@ export async function push(): Promise<boolean> {
     markSessionsSynced(out.sessions)
     markCategoriesSynced(out.categories)
     noteSuccess([...out.sessions.keys(), ...out.categories.keys()])
-    if (out.settingsAccepted) dropKey(KEY.settingsUpdatedAt)
+    // Kasujemy znacznik TYLKO gdy na dysku nadal lezy ta sama wartosc, ktora
+    // zostala wyslana. Inaczej zmiana ustawien zrobiona w trakcie trwajacego
+    // pusha znika bez sladu: serwer potwierdzil wersje starsza, a znacznik
+    // nowszej kasowalismy razem z nia.
+    if (out.settingsAccepted && readRaw(KEY.settingsUpdatedAt) === String(dirty.settingsUpdatedAt)) {
+      dropKey(KEY.settingsUpdatedAt)
+    }
 
     if (out.overridden.length) {
       const prev = readKey<Session[]>('pomodore-conflicts', [])
@@ -359,3 +365,8 @@ export function installTriggers() {
 }
 
 export function syncBlocked() { return pushBlocked }
+
+/** Podglad flag wewnetrznych - uzywane przez diagnostyke w zakladce Dane. */
+export function syncFlags() {
+  return { pushBlocked, pushInFlight, petlaDziala: loop !== null, startTrwa: startInFlight !== null }
+}
