@@ -222,3 +222,19 @@ label { display: block; }
 .banner.warn { border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
 
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* --- wykresy --- */
+.wykres-dymek {
+  position: absolute;
+  left: 0; right: 0; top: -6px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  pointer-events: none;
+  z-index: 5;
+}

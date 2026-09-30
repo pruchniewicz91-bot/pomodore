@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import SummaryView from './SummaryView'
 import { useSessions, streak } from '../store/sessions'
 import { useCategories } from '../store/categories'
 
@@ -18,6 +19,7 @@ export default function HistoryView() {
   const categories = useCategories((st) => st.categories)
   const activeCats = categories.filter((c) => !c.deletedAt)
   const [filter, setFilter] = useState<string | null>(null)
+  const [widok, setWidok] = useState<'podsumowanie' | 'lista'>('podsumowanie')
 
   const focus = useMemo(
     () => sessions.filter((s) => !s.deletedAt && s.mode === 'focus' && (!filter || s.categoryId === filter)),
@@ -44,6 +46,17 @@ export default function HistoryView() {
     return [...map.entries()]
   }, [focus])
 
+  const przelacznik = (
+    <div className="chips" role="group" aria-label="Widok historii">
+      <button className="chip" aria-pressed={widok === 'podsumowanie'} onClick={() => setWidok('podsumowanie')}>
+        Podsumowanie
+      </button>
+      <button className="chip" aria-pressed={widok === 'lista'} onClick={() => setWidok('lista')}>
+        Lista sesji
+      </button>
+    </div>
+  )
+
   if (!sessions.length) {
     return (
       <div className="card" style={{ textAlign: 'center', padding: 36 }}>
@@ -55,8 +68,18 @@ export default function HistoryView() {
     )
   }
 
+  if (widok === 'podsumowanie') {
+    return (
+      <div className="stack">
+        {przelacznik}
+        <SummaryView sessions={sessions} categories={categories} />
+      </div>
+    )
+  }
+
   return (
     <div className="stack">
+      {przelacznik}
       <div className="card">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4, textAlign: 'center' }}>
           {[
