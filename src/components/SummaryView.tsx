@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { Category, Session } from '../types'
 import {
-  czytelnyCzas, czytelnyCzasKrotki, dniAktywne, minuty, poDniach, poprzedniOkres, udzialy, wOkresie,
+  czytelnyCzas, czytelnyCzasKrotki, dniAktywne, minuty, poDniach, poprzedniOkres,
+  postepTygodnia, udzialy, wOkresie,
   type Dzien, type Okres,
 } from '../lib/statystyki'
 import { streak } from '../store/sessions'
@@ -90,6 +91,50 @@ function Rytm({ dni }: { dni: Dzien[] }) {
   )
 }
 
+/**
+ * Cele tygodnia. Pokazywane tylko wtedy, gdy jakakolwiek kategoria ma cel -
+ * pusta sekcja "nie masz zadnych celow" jest wyrzutem sumienia, nie informacja.
+ */
+function CeleTygodnia({ sessions, categories }: { sessions: Session[]; categories: Category[] }) {
+  const postep = useMemo(() => postepTygodnia(sessions, categories), [sessions, categories])
+  if (!postep.length) return null
+
+  return (
+    <div className="stack-sm">
+      <h2 className="dim" style={{ fontSize: 13 }}>CELE TYGODNIA</h2>
+      <div className="card stack-sm">
+        {postep.map((p) => {
+          const zrobione = Math.round(p.sekundy / 60)
+          const osiagniete = p.udzial >= 1
+          return (
+            <div key={p.kategoria.id}>
+              <div className="row" style={{ padding: '0 0 5px', border: 0 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14 }}>
+                  <span className="dot" style={{ background: p.kategoria.color }} />
+                  {p.kategoria.name}
+                </span>
+                <span className="mono faint">
+                  {zrobione} / {p.celMinut} min{osiagniete ? ' ✓' : ''}
+                </span>
+              </div>
+              <div className="meter">
+                <i style={{
+                  width: `${Math.min(100, p.udzial * 100)}%`,
+                  background: p.kategoria.color,
+                  opacity: osiagniete ? 1 : 0.85,
+                }} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <p className="faint" style={{ margin: 0 }}>
+        Tydzień liczony od poniedziałku. Cel ustawisz w Ustawieniach, przy kategorii.
+      </p>
+    </div>
+  )
+}
+
 export default function SummaryView({ sessions, categories }: {
   sessions: Session[]; categories: Category[]
 }) {
@@ -136,6 +181,7 @@ export default function SummaryView({ sessions, categories }: {
     return (
       <div className="stack">
         {filtry}
+        <CeleTygodnia sessions={sessions} categories={categories} />
         <div className="card" style={{ textAlign: 'center', padding: 32 }}>
           <p className="dim" style={{ margin: 0 }}>Brak ukończonych sesji w tym okresie.</p>
           <p className="faint" style={{ marginBottom: 0 }}>Wybierz szerszy zakres powyżej albo zacznij pierwszą sesję.</p>
@@ -172,6 +218,8 @@ export default function SummaryView({ sessions, categories }: {
           </div>
         )}
       </div>
+
+      <CeleTygodnia sessions={sessions} categories={categories} />
 
       <div className="stack-sm">
         <h2 className="dim" style={{ fontSize: 13 }}>RYTM</h2>

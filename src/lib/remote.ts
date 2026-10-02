@@ -81,6 +81,7 @@ const toRowCategory = (c: Category) => ({
   long_break_every_sessions: c.longBreakEverySessions,
   long_break_every_minutes: c.longBreakEveryMinutes,
   daily_session_goal: c.dailySessionGoal,
+  weekly_goal_minutes: c.weeklyGoalMinutes,
   updated_at_ms: c.updatedAt,
   deleted_at_ms: c.deletedAt,
 })
@@ -97,6 +98,7 @@ const fromRowCategory = (r: Record<string, unknown>): Category => ({
   longBreakEverySessions: (r.long_break_every_sessions as number) ?? null,
   longBreakEveryMinutes: (r.long_break_every_minutes as number) ?? null,
   dailySessionGoal: (r.daily_session_goal as number) ?? null,
+  weeklyGoalMinutes: (r.weekly_goal_minutes as number) ?? null,
   updatedAt: Number(r.updated_at_ms),
   deletedAt: r.deleted_at_ms === null || r.deleted_at_ms === undefined ? null : Number(r.deleted_at_ms),
   synced: true,

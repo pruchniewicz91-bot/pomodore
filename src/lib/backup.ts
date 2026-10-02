@@ -78,7 +78,7 @@ export function restoreBackup(json: string): RestoreReport {
 
   if (Array.isArray(data.categories)) {
     const box = readKey<{ state: { categories: Category[] }; version: number }>(
-      KEY.categories, { state: { categories: [] }, version: 5 }
+      KEY.categories, { state: { categories: [] }, version: 6 }
     )
     const byId = new Map(box.state.categories.map((c) => [c.id, c]))
     for (const c of data.categories) {
@@ -94,9 +94,9 @@ export function restoreBackup(json: string): RestoreReport {
       byId.set(c.id, zPliku)
       report.categories++
     }
-    // version: 5 celowo na sztywno - to biezacy numer, a import musi przejsc
+    // version: 6 celowo na sztywno - to biezacy numer, a import musi przejsc
     // przez te sama sciezke co reszta. Przy podniesieniu wersji zmienic TU.
-    writeKey(KEY.categories, { state: { categories: [...byId.values()] }, version: 5 })
+    writeKey(KEY.categories, { state: { categories: [...byId.values()] }, version: 6 })
   }
 
   if (data.settings && Object.keys(data.settings).length) {

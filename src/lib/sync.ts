@@ -73,7 +73,7 @@ function markSessionsSynced(potwierdzone: Map<string, { updatedAt: number; wysla
 function markCategoriesSynced(potwierdzone: Map<string, { updatedAt: number; wyslanoUpdatedAt: number }>) {
   if (!potwierdzone.size) return
   const box = readKey<{ state: { categories: Category[] }; version: number }>(
-    KEY.categories, { state: { categories: [] }, version: 5 }
+    KEY.categories, { state: { categories: [] }, version: 6 }
   )
   box.state.categories = box.state.categories.map((c) => {
     const p = potwierdzone.get(c.id)
@@ -88,7 +88,7 @@ function markCategoriesSynced(potwierdzone: Map<string, { updatedAt: number; wys
 function resetAllSynced() {
   writeKey(KEY.sessions, readSessions().map((s) => ({ ...s, synced: false })))
   const box = readKey<{ state: { categories: Category[] }; version: number }>(
-    KEY.categories, { state: { categories: [] }, version: 5 }
+    KEY.categories, { state: { categories: [] }, version: 6 }
   )
   box.state.categories = box.state.categories.map((c) => ({ ...c, synced: false }))
   writeKey(KEY.categories, box)
@@ -115,7 +115,7 @@ function mergeSessions(incoming: Session[]): { changed: number; ok: boolean } {
 function mergeCategories(incoming: Category[]): { changed: number; ok: boolean } {
   if (!incoming.length) return { changed: 0, ok: true }
   const box = readKey<{ state: { categories: Category[] }; version: number }>(
-    KEY.categories, { state: { categories: [] }, version: 5 }
+    KEY.categories, { state: { categories: [] }, version: 6 }
   )
   const merged = mergeById(box.state.categories, incoming.map((r) => ({ ...r, synced: true })))
   merged.sort((a, b) => a.position - b.position)

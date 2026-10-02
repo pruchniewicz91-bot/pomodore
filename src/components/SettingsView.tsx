@@ -65,7 +65,10 @@ export default function SettingsView() {
                 >
                   <span className="dot" style={{ background: c.color, width: 11, height: 11 }} />
                   <span style={{ fontSize: 14.5 }}>{c.name}</span>
-                  <span className="faint">{c.focusMin ?? s.focusMin} min</span>
+                  <span className="faint">
+                    {c.focusMin ?? s.focusMin} min
+                    {c.weeklyGoalMinutes ? ` · cel ${c.weeklyGoalMinutes}/tydz.` : ''}
+                  </span>
                 </button>
                 <button className="faint" onClick={() => remove(c.id)} aria-label={`Usuń ${c.name}`}>Usuń</button>
               </div>
@@ -85,6 +88,8 @@ export default function SettingsView() {
                     value={c.shortBreakMin ?? 0} onChange={(v) => update(c.id, { shortBreakMin: v || null })} />
                   <NumberRow label="Długa przerwa co" hint="minut skupienia, 0 = wyłączone" min={0} max={180} step={5}
                     value={c.longBreakEveryMinutes ?? 0} onChange={(v) => update(c.id, { longBreakEveryMinutes: v || null })} />
+                  <NumberRow label="Cel tygodniowy" hint="minut w tygodniu, 0 = bez celu" min={0} max={1200} step={30}
+                    value={c.weeklyGoalMinutes ?? 0} onChange={(v) => update(c.id, { weeklyGoalMinutes: v || null })} />
                 </div>
               )}
             </div>

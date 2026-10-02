@@ -41,6 +41,7 @@ export const useCategories = create<CategoriesStore>()(
           longBreakEverySessions: null,
           longBreakEveryMinutes: null,
           dailySessionGoal: null,
+          weeklyGoalMinutes: null,
         }
         set({ categories: [...list, cat] })
         scheduleSync()
@@ -74,7 +75,7 @@ export const useCategories = create<CategoriesStore>()(
     }),
     {
       name: KEY.categories,
-      version: 5,
+      version: 6,
       /**
        * Ten sam problem co w sessions.ts: persist zapisuje cala tablice
        * z pamieci. Kategoria pobrana z chmury zniknelaby przy pierwszej
@@ -109,13 +110,16 @@ export const useCategories = create<CategoriesStore>()(
       migrate: (persisted, version) => {
         const box = persisted as { categories?: Category[] } | undefined
         const list = box?.categories ?? []
-        if (version >= 5) return { categories: list }
+        if (version >= 6) return { categories: list }
+        // Z wersji 4 doszly pola synchronizacji, z wersji 5 cel tygodniowy.
+        // Brak celu to null, a nie zero - zero znaczyloby "cel wynosi 0 minut".
         return {
           categories: list.map((c) => ({
             ...c,
             updatedAt: c.updatedAt ?? c.createdAt ?? 0,
             deletedAt: c.deletedAt ?? null,
-            synced: false,
+            weeklyGoalMinutes: c.weeklyGoalMinutes ?? null,
+            synced: version < 5 ? false : c.synced,
           })),
         }
       },

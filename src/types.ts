@@ -19,6 +19,12 @@ export interface Category {
   longBreakEverySessions: number | null
   longBreakEveryMinutes: number | null
   dailySessionGoal: number | null
+  /**
+   * Cel tygodniowy w minutach. null = brak celu.
+   * Tygodniowy, a nie dzienny, bo na silownie chodzi sie trzy razy w tygodniu,
+   * a nie codziennie po jednej trzeciej treningu.
+   */
+  weeklyGoalMinutes: number | null
   // Synchronizacja. updatedAt rozstrzyga konflikty (LWW per rekord),
   // deletedAt to nagrobek - kasowanie nigdy nie usuwa wiersza fizycznie.
   updatedAt: number

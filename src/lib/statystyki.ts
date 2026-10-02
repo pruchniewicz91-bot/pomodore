@@ -150,3 +150,44 @@ export function czytelnyCzas(sekundy: number): string {
   const r = m % 60
   return r ? `${g} h ${r} min` : `${g} h`
 }
+
+// --- cele tygodniowe ---
+
+/** Poniedzialek biezacego tygodnia. W Polsce tydzien zaczyna sie w poniedzialek. */
+export function poczatekTygodnia(teraz = Date.now()): number {
+  const d = new Date(teraz)
+  d.setHours(0, 0, 0, 0)
+  const dzien = (d.getDay() + 6) % 7   // 0 = poniedzialek
+  d.setDate(d.getDate() - dzien)
+  return d.getTime()
+}
+
+export interface PostepCelu {
+  kategoria: Category
+  sekundy: number
+  celMinut: number
+  udzial: number
+}
+
+/**
+ * Postep wobec celu w biezacym tygodniu. Tylko kategorie z ustawionym celem -
+ * kategoria bez celu nie jest "na zero procent", tylko jest poza tym rachunkiem.
+ */
+export function postepTygodnia(
+  sessions: Session[], categories: Category[], teraz = Date.now()
+): PostepCelu[] {
+  const od = poczatekTygodnia(teraz)
+  const wTygodniu = sessions.filter(
+    (s) => !s.deletedAt && s.mode === 'focus' && s.status === 'completed' && s.startedAt >= od
+  )
+  return categories
+    .filter((c) => !c.deletedAt && c.weeklyGoalMinutes && c.weeklyGoalMinutes > 0)
+    .map((c) => {
+      const sekundy = wTygodniu
+        .filter((s) => s.categoryId === c.id)
+        .reduce((a, s) => a + s.actualSeconds, 0)
+      const celMinut = c.weeklyGoalMinutes!
+      return { kategoria: c, sekundy, celMinut, udzial: sekundy / 60 / celMinut }
+    })
+    .sort((a, b) => a.udzial - b.udzial)
+}
