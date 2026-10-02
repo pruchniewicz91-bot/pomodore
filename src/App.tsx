@@ -3,6 +3,7 @@ import TimerView from './components/TimerView'
 import HistoryView from './components/HistoryView'
 import SettingsView from './components/SettingsView'
 import DataView from './components/DataView'
+import InstallHint from './components/InstallHint'
 
 type Tab = 'timer' | 'history' | 'data' | 'settings'
 
@@ -30,6 +31,7 @@ export default function App() {
         </header>
 
         <main>
+          <InstallHint />
           {tab === 'timer' && <TimerView />}
           {tab === 'history' && <HistoryView />}
           {tab === 'data' && <DataView />}

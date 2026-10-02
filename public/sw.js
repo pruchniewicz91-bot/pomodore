@@ -2,7 +2,7 @@
 // Strategia: nawigacja z sieci z fallbackiem na cache (swieza wersja gdy jest internet),
 // zasoby z cache (sa haszowane, wiec nigdy nie sa nieaktualne).
 
-const CACHE = 'pomodore-v4-diag'
+const CACHE = 'pomodore-v5-splash'
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png']
 
 self.addEventListener('install', (e) => {
